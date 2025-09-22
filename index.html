@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Swipe Sudoku</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f72585">
+<link rel="manifest" href="manifest.json">
+<style>
+:root{
+  --bg:#0d1b2a;
+  --board:#1b263b;
+  --cell:#415a77;
+  --given:#e0e1dd;
+  --input:#778da9;
+  --error:#ef476f;
+  --success:#06d6a0;
+  --accent:#f72585;
+  --active:#ffd166;
+  --cross:rgba(255,209,102,0.22);
+  --hlNum:bg:rgba(247,37,133,.25);
+}
+body{margin:0;font-family:system-ui,Helvetica,Arial;background:var(--bg);color:var(--given);display:flex;flex-direction:column;align-items:center;padding:20px;min-height:100vh}
+h1{margin:0 0 10px;font-size:2rem;letter-spacing:1px}
+.row{display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;justify-content:center;align-items:center}
+#topStats{display:flex;gap:12px;font-size:1rem;font-weight:600}
+button{background:var(--accent);border:none;color:#fff;padding:10px 16px;border-radius:8px;font-weight:600;cursor:pointer;transition:background .2s}
+button:hover{background:#ff0854}
+select{background:var(--cell);color:#fff;border:none;padding:8px 12px;border-radius:8px}
+#msg{height:22px;margin-top:4px;font-weight:600;font-size:1.05rem;transition:color .3s}
+#boardWrap{overflow:auto;max-width:100vw;border-radius:12px;box-shadow:0 8px 20px #0006;margin-top:8px}
+table{border-collapse:collapse;background:var(--board)}
+td{text-align:center;position:relative;border:1px solid var(--cell);transition:background .2s}
+.given{color:var(--given);font-weight:700}
+.error{box-shadow:inset 0 0 0 3px var(--error)}
+.ok{box-shadow:inset 0 0 0 3px var(--success)}
+td.hl{background:var(--hlNum);color:var(--accent)}
+td.cross{background:var(--cross)}
+#numbers{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap;justify-content:center}
+.num-btn{width:50px;height:50px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:1.5rem;font-weight:700;cursor:pointer;transition:background .2s,transform .2s;position:relative}
+.num-btn:hover{background:#ff0854;transform:scale(1.05)}
+.num-btn:disabled{background:#555;cursor:not-allowed;opacity:.5}
+.num-btn.full{opacity:.4}
+.num-btn.active{background:var(--active);color:#000}
+.counter{font-size:.7rem;position:absolute;bottom:4px;left:50%;transform:translateX(-50%);color:#fff}
+#ctrl-row{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;justify-content:center}
+.ctrl-btn{width:50px;height:50px;border-radius:50%;background:var(--cell);color:#fff;border:none;font-size:1.4rem;font-weight:700;cursor:pointer;transition:background .2s}
+.ctrl-btn:hover{background:#556b8d}
+.ctrl-btn.on{background:var(--accent)}
+#winSplash{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;font-size:4rem;font-weight:800;color:var(--success);pointer-events:none;opacity:0;transition:opacity .5s}
+.swipeOut{animation:swipe .6s ease-out forwards}
+@keyframes swipe{from{transform:translateX(0)}to{transform:translateX(-100vw)}}
+#accordion{width:100%;max-width:380px;margin-top:20px;border-radius:12px;overflow:hidden;box-shadow:0 8px 20px #0006;background:var(--board);}
+.acc-card{border-bottom:1px solid var(--cell);}
+.acc-head{margin:0;padding:14px 18px;font-size:1.1rem;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--board);color:var(--given);transition:background .2s;}
+.acc-head:hover{background:#222e44;}
+.acc-body{padding:0 18px;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s;background:var(--bg);}
+.acc-body.open{padding:14px 18px;max-height:500px;}
+.acc-body p{margin:6px 0;font-size:.95rem;}
+.acc-body button{margin-top:10px;}
+.stat-row{display:flex;justify-content:space-between;padding:3px 0;}
+</style>
+</head>
+<body>
+<h1>Swipe Sudoku</h1>
+<div class="row">
+  <button onclick="newGame()">Neues Spiel</button>
+  <select id="diff" onchange="newGame()">
+    <option value="easyPeasy">Easy-Peasy (6×6)</option>
+    <option value="easy">Einfach</option>
+    <option value="med" selected>Mittel</option>
+    <option value="hard">Schwer</option>
+  </select>
+  <div id="topStats">
+    <div>Punkte: <span id="score">0</span></div>
+    <div>Fehler: <span id="mistakes">0</span></div>
+    <div>Zeit: <span id="timer">00:00</span></div>
+  </div>
+</div>
+<div id="msg"></div>
+<div id="boardWrap"><table id="board"></table></div>
+<div id="ctrl-row">
+  <button class="ctrl-btn" onclick="togglePause()" title="Pause/Weiter" id="pauseBtn">⏯</button>
+  <button class="ctrl-btn" onclick="undo()" title="Rückgängig">↶</button>
+  <button class="ctrl-btn" onclick="erase()" title="Löschen">⌫</button>
+  <button class="ctrl-btn" id="noteBtn" onclick="toggleNote()" title="Notiz-Modus">✏</button>
+  <button class="ctrl-btn" onclick="hint()" title="Hinweis">💡</button>
+</div>
+<div id="numbers"></div>
+<div id="winSplash">GEWONNEN!</div>
+
+<section id="accordion">
+  <article class="acc-card">
+    <h2 class="acc-head" onclick="toggleAcc(this)">Spielanleitung <span>▼</span></h2>
+    <div class="acc-body">
+      <p>• Klicke eine Zahl im Gitter an → Zeile/Spalte + alle gleichen Ziffern werden markiert.</p>
+      <p>• Setze oder notiere Zahlen nach Wahl.</p>
+      <p>• Ziel: Jede Zahl 1–6 bzw. 1–9 nur 1× pro Zeile, Spalte, Block.</p>
+      <p>• Notiz-Modus = kleine Kandidaten eintragen.</p>
+    </div>
+  </article>
+  <article class="acc-card">
+    <h2 class="acc-head" onclick="toggleAcc(this)">Statistiken <span>▼</span></h2>
+    <div class="acc-body">
+      <div class="stat-row"><span>Gewonnene Spiele:</span><span id="stat-wins">0</span></div>
+      <div class="stat-row"><span>Hilfen genutzt:</span><span id="stat-hints">0</span></div>
+      <div class="stat-row"><span>Punkte gesamt:</span><span id="stat-points">0</span></div>
+      <div class="stat-row"><span>Punkte-Bestwert:</span><span id="stat-bestScore">0</span></div>
+      <div class="stat-row"><span>Schnellste Zeit:</span><span id="stat-bestTime">–</span></div>
+      <div class="stat-row"><span>Geringste Fehler:</span><span id="stat-bestMistakes">–</span></div>
+      <div class="stat-row"><span>Gespielte Runden:</span><span id="stat-total">0</span></div>
+      <button onclick="resetStats()">Zurücksetzen</button>
+    </div>
+  </article>
+  <article class="acc-card">
+    <h2 class="acc-head" onclick="toggleAcc(this)">Über <span>▼</span></h2>
+    <div class="acc-body">
+      <p>Entwickelt von Björn Voss aka Omega</p>
+      <p>E-Mail: <a href="mailto:voss.1980@gmail.com" style="color:var(--accent)">voss.1980@gmail.com</a></p>
+      <p>Version: 1.2 PWA</p>
+    </div>
+  </article>
+</section>
+
+<script>
+let SIZE=9, BOX=3;
+let grid, solution, activeNumber=null, noteMode=false, history=[], timer=0, timerInterval=null, mistakes=0, score=0, activeCell=null, timerStarted=false, paused=false, masterNumber=null;
+
+const boardEl=document.getElementById('board');
+const msgEl=document.getElementById('msg');
+const numbersEl=document.getElementById('numbers');
+const winSplash=document.getElementById('winSplash');
+
+const STAT_KEYS={wins:'ss_wins',hints:'ss_hints',points:'ss_points',total:'ss_total'};
+
+function newGame(){
+  clearInterval(timerInterval);
+  timer=0; mistakes=0; score=0; timerStarted=false; paused=false; masterNumber=null;
+  document.getElementById('pauseBtn').textContent='⏯';
+  updateTopStats();
+  const diff=document.getElementById('diff').value;
+  if(diff==='easyPeasy'){SIZE=6;BOX=3;}else{SIZE=9;BOX=3;}
+  solution=generateComplete();
+  const removeCount={easyPeasy:10,easy:40,med:50,hard:60}[diff];
+  grid=solution.map(r=>r.slice());
+  for(let i=0;i<removeCount;i++){
+    let r,c;do{r=rand(SIZE);c=rand(SIZE);}while(grid[r][c]===0);
+    grid[r][c]=0;
+  }
+  history=[]; activeNumber=null; noteMode=false; activeCell=null;
+  render(); renderNumbers(); clearHighlight();
+  msgEl.textContent=''; winSplash.style.opacity='0';
+}
+function generateComplete(){
+  const g=Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+  fillGrid(g);
+  return g;
+}
+function fillGrid(g){
+  const nums=shuffle([...Array(SIZE)].map((_,i)=>i+1));
+  for(let r=0;r<SIZE;r++){
+    for(let c=0;c<SIZE;c++){
+      if(g[r][c]!==0)continue;
+      for(let n of nums){
+        if(isValid(g,r,c,n)){
+          g[r][c]=n;
+          if(fillGrid(g))return true;
+          g[r][c]=0;
+        }
+      }
+      return false;
+    }
+  }
+  return true;
+}
+function isValid(g,r,c,n){
+  for(let i=0;i<SIZE;i++)if(g[r][i]===n||g[i][c]===n)return false;
+  const br=Math.floor(r/BOX)*BOX, bc=Math.floor(c/(SIZE===6?2:3))*(SIZE===6?2:3);
+  const brow=BOX, bcol=SIZE===6?2:3;
+  for(let i=0;i<brow;i++)for(let j=0;j<bcol;j++)if(g[br+i][bc+j]===n)return false;
+  return true;
+}
+function render(){
+  boardEl.innerHTML='';
+  for(let r=0;r<SIZE;r++){
+    const tr=document.createElement('tr');
+    for(let c=0;c<SIZE;c++){
+      const td=document.createElement('td');
+      const v=grid[r][c];
+      td.style.width=td.style.height=SIZE===6?'52px':'46px';
+      td.style.fontSize=SIZE===6?'1.8rem':'1.6rem';
+      if(v){
+        td.textContent=v;
+        td.classList.add('given');
+      }else{
+        td.dataset.r=r; td.dataset.c=c;
+        td.onclick=()=>cellClick(td);
+        td.classList.add('empty');
+      }
+      const thickRight=(c+1)%bcol===0&&c!==SIZE-1?'2px solid var(--cell)':'';
+      const thickBot=(r+1)%brow===0&&r!==SIZE-1?'2px solid var(--cell)':'';
+      td.style.borderRight=thickRight; td.style.borderBottom=thickBot;
+      tr.appendChild(td);
+    }
+    boardEl.appendChild(tr);
+  }
+}
+const brow=BOX, bcol=SIZE===6?2:3;
+
+function renderNumbers(){
+  numbersEl.innerHTML='';
+  const counts=Array(SIZE+1).fill(0);
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)counts[grid[r][c]]++;
+  for(let n=1;n<=SIZE;n++){
+    const wrap=document.createElement('div'); wrap.style.position='relative';
+    const btn=document.createElement('button');
+    btn.className='num-btn'; btn.textContent=n;
+    btn.onclick=()=>toggleNumber(n,btn);
+    if(n===activeNumber)btn.classList.add('active');
+    if(counts[n]>=SIZE)btn.classList.add('full');
+    const cnt=document.createElement('span'); cnt.className='counter'; cnt.textContent=SIZE-counts[n];
+    wrap.appendChild(btn); wrap.appendChild(cnt);
+    numbersEl.appendChild(wrap);
+  }
+}
+function toggleNumber(n,btn){
+  if(!timerStarted){startTimer(); timerStarted=true; paused=false; document.getElementById('pauseBtn').textContent='⏯';}
+  if(paused){paused=false; startTimer(); document.getElementById('pauseBtn').textContent='⏯';}
+  activeNumber=activeNumber===n?null:n;
+  highlightNumber(activeNumber);
+  renderNumbers();
+}
+function highlightNumber(n){
+  clearHighlight();
+  if(!n)return;
+  document.querySelectorAll('td').forEach(td=>{if(td.textContent==n)td.classList.add('hl');});
+}
+function clearHighlight(){
+  document.querySelectorAll('td').forEach(t=>{t.classList.remove('hl','cross');});
+}
+function highlightCross(r,c){
+  document.querySelectorAll('td').forEach(td=>{
+    if(td.dataset.r==r||td.dataset.c==c)td.classList.add('cross');
+  });
+}
+function cellClick(td){
+  if(td.classList.contains('given'))return;
+  activeCell=td;
+  const val=td.textContent;
+  if(val){masterNumber=+val;}else{masterNumber=activeNumber||null;}
+  clearHighlight();
+  highlightCross(td.dataset.r,td.dataset.c);
+  if(masterNumber)highlightNumber(masterNumber);
+  if(!activeNumber){msgEl.textContent='Zahl wählen!';return;}
+  if(!timerStarted){startTimer(); timerStarted=true; paused=false; document.getElementById('pauseBtn').textContent='⏯';}
+  if(paused){paused=false; startTimer(); document.getElementById('pauseBtn').textContent='⏯';}
+  const r=+td.dataset.r, c=+td.dataset.c, n=activeNumber;
+  if(noteMode){
+    if(td.textContent==n){td.textContent='';td.style.fontSize='';td.classList.remove('ok');}
+    else{td.textContent=n;td.style.fontSize='.9rem';td.classList.remove('ok');}
+    return;
+  }
+  if(!isValid(grid,r,c,n)){
+    td.classList.add('error');
+    setTimeout(()=>td.classList.remove('error'),500);
+    mistakes++; score=Math.max(0,score-5); updateTopStats(); return;
+  }
+  saveHistory();
+  td.textContent=n; td.style.fontSize=''; td.classList.remove('error'); td.classList.add('ok');
+  grid[r][c]=n; score+=10;
+  updateTopStats(); renderNumbers(); highlightNumber(activeNumber);
+  if(grid.every((row,r)=>row.every((v,c)=>v===solution[r][c])))win();
+}
+function saveHistory(){history.push(grid.map(r=>r.slice()));}
+function undo(){
+  if(!history.length){msgEl.textContent='Nichts rückgängig!';return;}
+  grid=history.pop(); render(); renderNumbers(); clearHighlight(); if(masterNumber)highlightNumber(masterNumber);
+}
+function erase(){
+  if(!activeCell||activeCell.classList.contains('given')){msgEl.textContent='Kein markiertes Feld!';return;}
+  const r=+activeCell.dataset.r, c=+activeCell.dataset.c;
+  saveHistory();
+  activeCell.textContent=''; activeCell.classList.remove('ok'); grid[r][c]=0;
+  renderNumbers(); if(masterNumber)highlightNumber(masterNumber);
+}
+function toggleNote(){
+  noteMode=!noteMode;
+  document.getElementById('noteBtn').classList.toggle('on',noteMode);
+}
+function togglePause(){
+  if(!timerStarted)return;
+  if(!paused){
+    paused=true;
+    clearInterval(timerInterval);
+    document.getElementById('pauseBtn').textContent='▶';
+  }else{
+    paused=false;
+    startTimer();
+    document.getElementById('pauseBtn').textContent='⏯';
+  }
+}
+function hint(){
+  if(score<30){msgEl.textContent='Nicht genug Punkte (30 nötig)!';return;}
+  const empties=[];
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(grid[r][c]===0)empties.push({r,c});
+  if(!empties.length){msgEl.textContent='Kein Feld frei.';return;}
+  saveHistory();
+  const pick=empties[rand(empties.length)];
+  const td=boardEl.querySelector(`td[data-r="${pick.r}"][data-c="${pick.c}"]`);
+  if(!td)return;
+  td.textContent=solution[pick.r][pick.c]; td.classList.remove('error'); td.classList.add('ok');
+  grid[pick.r][pick.c]=solution[pick.r][pick.c];
+  score=Math.max(0,score-30);
+  updateTopStats(); renderNumbers(); if(masterNumber)highlightNumber(masterNumber);
+  const s=loadStats();
+  s.hints+=1; s.total+=1;
+  saveStats(s); renderStats();
+}
+function win(){
+  clearInterval(timerInterval);
+  const s=loadStats();
+  s.wins+=1; s.total+=1; s.points+=score;
+  if(score>+(localStorage.getItem('ss_bestScore')||0))localStorage.setItem('ss_bestScore',score);
+  const bestT=+(localStorage.getItem('ss_bestTime')||0);
+  if(!bestT||timer<bestT)localStorage.setItem('ss_bestTime',timer);
+  const bestM=+(localStorage.getItem('ss_bestMistakes')||-1);
+  if(bestM===-1||mistakes<bestM)localStorage.setItem('ss_bestMistakes',mistakes);
+  saveStats(s); renderStats();
+  numbersEl.classList.add('swipeOut');
+  winSplash.style.opacity='1';
+  setTimeout(()=>{
+    numbersEl.classList.remove('swipeOut');
+    numbersEl.innerHTML='';
+    winSplash.style.opacity='0';
+    newGame();
+  },2000);
+}
+function startTimer(){
+  clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{
+    timer++;
+    const m=String(Math.floor(timer/60)).padStart(2,'0');
+    const s=String(timer%60).padStart(2,'0');
+    document.getElementById('timer').textContent=`${m}:${s}`;
+  },1000);
+}
+function updateTopStats(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('mistakes').textContent=mistakes;
+}
+function loadStats(){
+  return {
+    wins:   +(localStorage.getItem(STAT_KEYS.wins)   || 0),
+    hints:  +(localStorage.getItem(STAT_KEYS.hints)  || 0),
+    points: +(localStorage.getItem(STAT_KEYS.points) || 0),
+    total:  +(localStorage.getItem(STAT_KEYS.total)  || 0)
+  };
+}
+function saveStats(s){
+  Object.entries(STAT_KEYS).forEach(([k,store])=>localStorage.setItem(store,s[k]||0));
+}
+function renderStats(){
+  const s=loadStats();
+  document.getElementById('stat-wins').textContent=s.wins;
+  document.getElementById('stat-hints').textContent=s.hints;
+  document.getElementById('stat-points').textContent=s.points;
+  document.getElementById('stat-bestScore').textContent=localStorage.getItem('ss_bestScore')||0;
+  const bestT=+(localStorage.getItem('ss_bestTime')||0);
+  document.getElementById('stat-bestTime').textContent=bestT?String(Math.floor(bestT/60)).padStart(2,'0')+':'+String(bestT%60).padStart(2,'0'):'–';
+  document.getElementById('stat-bestMistakes').textContent=localStorage.getItem('ss_bestMistakes')||'–';
+  document.getElementById('stat-total').textContent=s.total;
+}
+function resetStats(){
+  if(!confirm('Alle Statistiken zurücksetzen?'))return;
+  Object.values(STAT_KEYS).forEach(k=>localStorage.removeItem(k));
+  localStorage.removeItem('ss_bestScore');
+  localStorage.removeItem('ss_bestTime');
+  localStorage.removeItem('ss_bestMistakes');
+  renderStats();
+}
+function toggleAcc(head){
+  head.nextElementSibling.classList.toggle('open');
+  head.querySelector('span').textContent=head.nextElementSibling.classList.contains('open')?'▲':'▼';
+}
+function rand(n){return Math.floor(Math.random()*n);}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+// PWA – Service-Worker registrieren
+if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js');}
+
+newGame();
+renderStats();
+</script>
+</body>
+</html>
