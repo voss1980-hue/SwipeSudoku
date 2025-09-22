@@ -20,6 +20,14 @@
   --cross:rgba(255,209,102,0.22);
   --hlNum:bg:rgba(247,37,133,.25);
 }
+/* GLOBAL: kein Text-Selektions-Menü, kein Google-Finden */
+*{
+  -webkit-user-select:none;
+  -moz-user-select:none;
+  -ms-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
 body{margin:0;font-family:system-ui,Helvetica,Arial;background:var(--bg);color:var(--given);display:flex;flex-direction:column;align-items:center;padding:20px;min-height:100vh}
 h1{margin:0 0 10px;font-size:2rem;letter-spacing:1px}
 .row{display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;justify-content:center;align-items:center}
@@ -59,15 +67,6 @@ td.cross{background:var(--cross)}
 .acc-body p{margin:6px 0;font-size:.95rem;}
 .acc-body button{margin-top:10px;}
 .stat-row{display:flex;justify-content:space-between;padding:3px 0;}
-
-/* VERHIINDERT SUCH-POPUP & TEXT-SELEKTION */
-button,.num-btn,.ctrl-btn{
-  -webkit-user-select:none;
-  -moz-user-select:none;
-  -ms-user-select:none;
-  user-select:none;
-  -webkit-touch-callout:none;
-}
 </style>
 </head>
 <body>
@@ -401,4 +400,5 @@ newGame();
 renderStats();
 </script>
 </body>
+</html>y>
 </html>
