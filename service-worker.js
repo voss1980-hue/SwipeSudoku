@@ -1,4 +1,4 @@
-const CACHE = 'sudoku-v1';
+const CACHE = 'sudoku-v2';
 const FILES = [
   './index.html',
   './manifest.json',
